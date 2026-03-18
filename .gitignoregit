@@ -1,0 +1,2 @@
+__pycache__/  *.pyc  .env  initgit add .git commit -m "Digital Ledger MVP"git branch -M maingit remote add origin https://github.com/iam-Arnav/digital-ledger.gitgit push -u origin main
+__pycache__/  *.pyc  .env  initgit add .git commit -m "Digital Ledger MVP"git branch -M maingit remote add origin https://github.com/iam-Arnav/digital-ledger.gitgit push -u origin main
