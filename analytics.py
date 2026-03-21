@@ -36,17 +36,21 @@ def get_monthly_trend_df(merchant_id: str) -> pd.DataFrame:
 
     rows = {}
     for r in raw:
-        key = f"{r['_id']['year']}-{r['_id']['month']:02d}"
+        # Format as "Jan 2026", "Feb 2026" etc.
+        key = datetime(r['_id']['year'], r['_id']['month'], 1).strftime("%b %Y")
         if key not in rows:
-            rows[key] = {"month": key, "credit": 0.0, "payment": 0.0}
+            rows[key] = {"month": key, "credit": 0.0, "payment": 0.0,
+                         "sort_key": datetime(r['_id']['year'], r['_id']['month'], 1)}
         rows[key][r["_id"]["type"]] = r["total"]
 
-    df = pd.DataFrame(list(rows.values())).sort_values("month")
+    df = pd.DataFrame(list(rows.values()))
+    df = df.sort_values("sort_key").drop(columns=["sort_key"])
+    df = df.reset_index(drop=True)
     return df
 
 
 def get_risk_distribution(merchant_id: str) -> pd.DataFrame:
-    cust_col = get_customers_col()
+    cust_col  = get_customers_col()
     customers = list(cust_col.find({"merchant_id": merchant_id}))
     cats = [c.get("risk_category", "Low Risk") for c in customers]
     if not cats:

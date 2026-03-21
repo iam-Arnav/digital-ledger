@@ -1,5 +1,8 @@
 import warnings
 warnings.filterwarnings("ignore")
+import os
+os.environ["PYTHONWARNINGS"] = "ignore"
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -34,7 +37,6 @@ def init_db():
 
 init_db()
 
-# ── Session defaults ──────────────────────────────────────────────────────────
 def _def(key, val):
     if key not in st.session_state:
         st.session_state[key] = val
@@ -44,7 +46,7 @@ _def("user_id",              "")
 _def("username",             "")
 _def("business_name",        "")
 _def("theme",                "dark")
-_def("mode",                 "merchant")   # merchant | customer
+_def("mode",                 "merchant")
 _def("cust_logged_in",       False)
 _def("cust_data",            {})
 _def("otp_phone",            "")
@@ -52,16 +54,11 @@ _def("otp_sent",             False)
 _def("edit_txn_id",          None)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# THEME CSS
-# ══════════════════════════════════════════════════════════════════════════════
 def inject_theme():
     dark = st.session_state.theme == "dark"
     bg       = "#0f0f1a" if dark else "#f5f7ff"
     card_bg  = "#1a1a2e" if dark else "#ffffff"
     text     = "#e8e8ff" if dark else "#1a1a2e"
-    sub_text = "#9999cc" if dark else "#555577"
-    accent   = "#667eea"
     border   = "#2a2a4a" if dark else "#dde0f0"
     sidebar  = "#12122a" if dark else "#1a1a2e"
 
@@ -69,17 +66,9 @@ def inject_theme():
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
     html, body, [class*="css"] {{ font-family: 'Inter', sans-serif; }}
-
     .stApp {{ background: {bg}; color: {text}; }}
-
-    /* Sidebar */
-    section[data-testid="stSidebar"] {{
-        background: {sidebar} !important;
-    }}
+    section[data-testid="stSidebar"] {{ background: {sidebar} !important; }}
     section[data-testid="stSidebar"] * {{ color: #eee !important; }}
-    section[data-testid="stSidebar"] .stRadio label {{ color: #eee !important; }}
-
-    /* Metric card */
     .metric-card {{
         background: linear-gradient(135deg, #667eea, #764ba2);
         padding: 18px; border-radius: 14px; color: white;
@@ -88,46 +77,16 @@ def inject_theme():
     }}
     .metric-card h3 {{ font-size: 1.9rem; margin: 4px 0 0; }}
     .metric-card p  {{ margin: 0; opacity: 0.85; font-size: 0.85rem; }}
-
-    /* Cards */
     .info-card {{
         background: {card_bg}; border: 1px solid {border};
         border-radius: 12px; padding: 16px; margin-bottom: 10px;
     }}
-
-    /* Risk badges */
-    .badge {{ padding: 3px 10px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; }}
-    .badge-low     {{ background: #d4edda; color: #155724; }}
-    .badge-medium  {{ background: #fff3cd; color: #856404; }}
-    .badge-high    {{ background: #f8d7da; color: #721c24; }}
-    .badge-default {{ background: #e2d9f3; color: #4a235a; }}
-
-    /* Inputs */
-    .stTextInput input, .stNumberInput input, .stSelectbox select {{
-        border-radius: 8px !important;
-    }}
-
-    /* Buttons */
-    .stButton > button {{
-        border-radius: 8px !important;
-        transition: all 0.2s;
-    }}
-
-    /* Mobile responsive */
-    @media (max-width: 768px) {{
-        .metric-card h3 {{ font-size: 1.4rem; }}
-        .stColumns {{ flex-direction: column; }}
-    }}
-
-    /* Table */
-    .dataframe {{ border-radius: 10px !important; overflow: hidden; }}
+    .stButton > button {{ border-radius: 8px !important; transition: all 0.2s; }}
+    .stTextInput input, .stNumberInput input {{ border-radius: 8px !important; }}
     </style>
     """, unsafe_allow_html=True)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# AUTH / LOGIN PAGE
-# ══════════════════════════════════════════════════════════════════════════════
 def show_auth_page():
     inject_theme()
     col1, col2, col3 = st.columns([1, 2.2, 1])
@@ -138,7 +97,6 @@ def show_auth_page():
 
         tabs = st.tabs(["🔑 Merchant Login", "📝 Register", "👤 Customer Portal", "🔓 Forgot Password"])
 
-        # ── Merchant Login ────────────────────────────────────────────────────
         with tabs[0]:
             with st.form("login_form"):
                 username = st.text_input("Username")
@@ -156,7 +114,6 @@ def show_auth_page():
                     else:
                         st.error(res["message"])
 
-        # ── Register ──────────────────────────────────────────────────────────
         with tabs[1]:
             with st.form("register_form"):
                 c1, c2 = st.columns(2)
@@ -172,9 +129,11 @@ def show_auth_page():
                         st.error("All fields are required.")
                     else:
                         res = register_user(new_user, new_pass, biz_name, phone)
-                        st.success("Account created! Please login.") if res["success"] else st.error(res["message"])
+                        if res["success"]:
+                            st.success("Account created! Please login.")
+                        else:
+                            st.error(res["message"])
 
-        # ── Customer Portal ───────────────────────────────────────────────────
         with tabs[2]:
             st.info("Customers: log in with your phone number and PIN set by your merchant.")
             with st.form("cust_login_form"):
@@ -190,7 +149,6 @@ def show_auth_page():
                     else:
                         st.error(res["message"])
 
-        # ── Forgot Password ───────────────────────────────────────────────────
         with tabs[3]:
             if not st.session_state.otp_sent:
                 with st.form("otp_request_form"):
@@ -227,9 +185,6 @@ def show_auth_page():
                         st.rerun()
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# CUSTOMER PORTAL
-# ══════════════════════════════════════════════════════════════════════════════
 def show_customer_portal():
     inject_theme()
     cust = st.session_state.cust_data
@@ -248,7 +203,6 @@ def show_customer_portal():
 
     st.header(f"👋 Hello, {cust.get('name', '')}!")
 
-    # Balance card
     balance = cust.get("balance", 0)
     color   = "#e74c3c" if balance > 0 else "#27ae60"
     st.markdown(f"""
@@ -259,8 +213,6 @@ def show_customer_portal():
     </div>""", unsafe_allow_html=True)
 
     st.divider()
-
-    # Transaction history
     st.subheader("📜 Your Transactions")
     txns = get_transactions(mid, cust["_id"])
     if txns:
@@ -270,7 +222,6 @@ def show_customer_portal():
         df["amount"] = df["amount"].map(lambda x: f"₹{x:,.2f}")
         st.dataframe(df[["date", "type", "amount", "note"]], use_container_width=True, hide_index=True)
 
-        # Download invoice
         st.divider()
         if st.button("📄 Download My Invoice (PDF)", use_container_width=True):
             raw_txns = get_transactions(mid, cust["_id"])
@@ -289,13 +240,10 @@ def show_customer_portal():
         st.info("No transactions found for your account.")
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# MERCHANT SIDEBAR
-# ══════════════════════════════════════════════════════════════════════════════
 def show_sidebar():
     inject_theme()
     with st.sidebar:
-        st.markdown(f"### 📒 Digital Ledger")
+        st.markdown("### 📒 Digital Ledger")
         st.markdown(f"**{st.session_state.business_name}**")
         st.markdown(f"*@{st.session_state.username}*")
         st.divider()
@@ -310,7 +258,6 @@ def show_sidebar():
         ])
         st.divider()
 
-        # Theme toggle
         dark_mode = st.toggle("🌙 Dark Mode", value=(st.session_state.theme == "dark"))
         st.session_state.theme = "dark" if dark_mode else "light"
 
@@ -323,9 +270,6 @@ def show_sidebar():
     return page
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# DASHBOARD
-# ══════════════════════════════════════════════════════════════════════════════
 def show_dashboard():
     st.header("📊 Dashboard")
     mid   = st.session_state.user_id
@@ -383,16 +327,12 @@ def show_dashboard():
         st.success("🎉 No outstanding balances!")
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# CUSTOMERS
-# ══════════════════════════════════════════════════════════════════════════════
 def show_customers():
     st.header("👥 Customers")
     mid = st.session_state.user_id
 
     tab_list, tab_add, tab_bulk = st.tabs(["📋 Customer List", "➕ Add Customer", "📤 Bulk Import"])
 
-    # ── Add single customer ───────────────────────────────────────────────────
     with tab_add:
         with st.form("add_customer_form"):
             c1, c2 = st.columns(2)
@@ -415,7 +355,6 @@ def show_customers():
                     else:
                         st.error(res["message"])
 
-    # ── Bulk import ───────────────────────────────────────────────────────────
     with tab_bulk:
         st.markdown("Upload an Excel file with columns: **name**, **phone**, **address** (optional)")
         templ = generate_template()
@@ -438,7 +377,6 @@ def show_customers():
                 else:
                     st.error(res["message"])
 
-    # ── Customer list ─────────────────────────────────────────────────────────
     with tab_list:
         customers = get_customers(mid)
         if not customers:
@@ -468,7 +406,6 @@ def show_customers():
 
                 btn1, btn2, btn3 = st.columns(3)
 
-                # Set/Update PIN
                 with btn1:
                     with st.form(f"pin_form_{c['_id']}"):
                         new_pin = st.text_input("Set Portal PIN", max_chars=4, key=f"pin_{c['_id']}")
@@ -480,14 +417,12 @@ def show_customers():
                             else:
                                 st.error("PIN must be 4 digits.")
 
-                # Invoice download
                 with btn2:
                     txns = get_transactions(mid, c["_id"])
                     if txns:
                         for t in txns:
                             if not hasattr(t.get("date"), "strftime"):
-                                import pandas as pd_
-                                t["date"] = pd_.to_datetime(t["date"])
+                                t["date"] = pd.to_datetime(t["date"])
                         pdf = generate_invoice(
                             st.session_state.business_name,
                             c["name"], c["phone"], txns, c["balance"]
@@ -498,7 +433,6 @@ def show_customers():
                             mime="application/pdf", key=f"inv_{c['_id']}"
                         )
 
-                # Delete
                 with btn3:
                     if st.button("🗑️ Delete Customer", key=f"del_{c['_id']}"):
                         res = delete_customer(c["_id"], mid)
@@ -508,9 +442,6 @@ def show_customers():
                             st.rerun()
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# TRANSACTIONS
-# ══════════════════════════════════════════════════════════════════════════════
 def show_transactions():
     st.header("💳 Transactions")
     mid       = st.session_state.user_id
@@ -522,7 +453,6 @@ def show_transactions():
 
     cust_map = {c["name"]: c for c in customers}
 
-    # ── Record transaction ────────────────────────────────────────────────────
     with st.expander("➕ Record New Transaction", expanded=True):
         with st.form("txn_form"):
             c1, c2, c3 = st.columns(3)
@@ -539,8 +469,7 @@ def show_transactions():
                 cust = cust_map[cust_name]
                 res  = add_transaction(mid, cust["_id"], txn_type, amount, note)
                 if res["success"]:
-                    log_action(mid, "ADD_TXN",
-                               f"{txn_type.capitalize()} ₹{amount:.2f} for {cust_name}")
+                    log_action(mid, "ADD_TXN", f"{txn_type.capitalize()} ₹{amount:.2f} for {cust_name}")
                     st.success(f"✅ Recorded ₹{amount:.2f} {txn_type} for {cust_name}")
                     if send_rcpt:
                         rcpt = send_receipt(
@@ -580,7 +509,6 @@ def show_transactions():
 
             ea, eb = st.columns(2)
 
-            # Edit
             with ea:
                 with st.form(f"edit_{t['_id']}"):
                     new_amt  = st.number_input("New Amount", value=float(t["amount"]), min_value=0.01, step=1.0)
@@ -588,26 +516,21 @@ def show_transactions():
                     if st.form_submit_button("✏️ Save Edit"):
                         res = edit_transaction(t["_id"], mid, new_amt, new_note)
                         if res["success"]:
-                            log_action(mid, "EDIT_TXN",
-                                       f"Edited txn {t['_id']}: ₹{t['amount']} → ₹{new_amt}")
+                            log_action(mid, "EDIT_TXN", f"Edited txn {t['_id']}")
                             st.success("Transaction updated.")
                             st.rerun()
                         else:
                             st.error(res["message"])
 
-            # Delete
             with eb:
                 if st.button("🗑️ Delete", key=f"dtxn_{t['_id']}"):
                     res = delete_transaction(t["_id"], mid)
                     if res["success"]:
-                        log_action(mid, "DELETE_TXN", f"Deleted txn ₹{t['amount']} for {t['customer_name']}")
+                        log_action(mid, "DELETE_TXN", f"Deleted txn for {t['customer_name']}")
                         st.success("Transaction deleted.")
                         st.rerun()
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# DEFAULTERS
-# ══════════════════════════════════════════════════════════════════════════════
 def show_defaulters():
     st.header("⚠️ Defaulters")
     mid        = st.session_state.user_id
@@ -635,9 +558,6 @@ def show_defaulters():
         st.divider()
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# REMINDERS
-# ══════════════════════════════════════════════════════════════════════════════
 def show_reminders():
     st.header("🔔 Payment Reminders")
     mid = st.session_state.user_id
@@ -670,9 +590,6 @@ def show_reminders():
         st.success(f"✅ {sent}/{len(results)} reminders sent.")
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# ACTIVITY LOG
-# ══════════════════════════════════════════════════════════════════════════════
 def show_activity_log():
     st.header("📋 Activity Log")
     mid  = st.session_state.user_id
@@ -706,21 +623,15 @@ def show_activity_log():
     st.dataframe(display, use_container_width=True, hide_index=True)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# MAIN
-# ══════════════════════════════════════════════════════════════════════════════
 def main():
-    # Customer portal mode
     if st.session_state.mode == "customer" and st.session_state.cust_logged_in:
         show_customer_portal()
         return
 
-    # Not logged in
     if not st.session_state.logged_in:
         show_auth_page()
         return
 
-    # Merchant app
     page = show_sidebar()
     if   page == "📊 Dashboard":    show_dashboard()
     elif page == "👥 Customers":    show_customers()
