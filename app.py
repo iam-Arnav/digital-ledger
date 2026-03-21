@@ -19,7 +19,8 @@ st.set_page_config(
 from database import create_indexes
 from auth import register_user, login_user
 from customers import (add_customer, get_customers, get_defaulters,
-                       delete_customer, customer_portal_login, update_customer_pin)
+                       delete_customer, customer_portal_login,
+                       update_customer_pin, compute_credit_score)
 from transactions import (add_transaction, edit_transaction,
                            delete_transaction, get_transactions)
 from analytics import get_summary_stats, get_monthly_trend_df, get_risk_distribution
@@ -55,12 +56,12 @@ _def("edit_txn_id",          None)
 
 
 def inject_theme():
-    dark = st.session_state.theme == "dark"
-    bg       = "#0f0f1a" if dark else "#f5f7ff"
-    card_bg  = "#1a1a2e" if dark else "#ffffff"
-    text     = "#e8e8ff" if dark else "#1a1a2e"
-    border   = "#2a2a4a" if dark else "#dde0f0"
-    sidebar  = "#12122a" if dark else "#1a1a2e"
+    dark    = st.session_state.theme == "dark"
+    bg      = "#0f0f1a" if dark else "#f5f7ff"
+    card_bg = "#1a1a2e" if dark else "#ffffff"
+    text    = "#e8e8ff" if dark else "#1a1a2e"
+    border  = "#2a2a4a" if dark else "#dde0f0"
+    sidebar = "#12122a" if dark else "#1a1a2e"
 
     st.markdown(f"""
     <style>
@@ -116,7 +117,7 @@ def show_auth_page():
 
         with tabs[1]:
             with st.form("register_form"):
-                c1, c2 = st.columns(2)
+                c1, c2    = st.columns(2)
                 new_user  = c1.text_input("Username")
                 biz_name  = c2.text_input("Business Name")
                 phone     = st.text_input("Your Phone Number (for OTP recovery)")
@@ -180,7 +181,7 @@ def show_auth_page():
                                 st.session_state.otp_phone = ""
                             else:
                                 st.error(res["message"])
-                    if c2.form_submit_button("← Back", use_container_width=True):
+                    if c2.form_submit_button("Back", use_container_width=True):
                         st.session_state.otp_sent = False
                         st.rerun()
 
@@ -202,7 +203,6 @@ def show_customer_portal():
             st.rerun()
 
     st.header(f"👋 Hello, {cust.get('name', '')}!")
-
     balance = cust.get("balance", 0)
     color   = "#e74c3c" if balance > 0 else "#27ae60"
     st.markdown(f"""
@@ -308,8 +308,13 @@ def show_dashboard():
         if rdf.empty:
             st.info("No customers yet.")
         else:
-            colors_map = {"Low Risk": "#27ae60", "Medium Risk": "#f39c12",
-                          "High Risk": "#e74c3c", "Defaulter": "#8e44ad"}
+            colors_map = {
+                "Excellent":   "#1abc9c",
+                "Low Risk":    "#27ae60",
+                "Medium Risk": "#f39c12",
+                "High Risk":   "#e74c3c",
+                "Defaulter":   "#8e44ad",
+            }
             fig2 = px.pie(rdf, names="category", values="count",
                           color="category", color_discrete_map=colors_map, height=340)
             fig2.update_layout(paper_bgcolor="rgba(0,0,0,0)")
@@ -335,7 +340,7 @@ def show_customers():
 
     with tab_add:
         with st.form("add_customer_form"):
-            c1, c2 = st.columns(2)
+            c1, c2  = st.columns(2)
             name    = c1.text_input("Customer Name *")
             phone   = c2.text_input("Phone Number *")
             address = st.text_input("Address (optional)")
@@ -383,13 +388,27 @@ def show_customers():
             st.info("No customers yet. Add your first customer.")
             return
 
+        # ── Recalculate all scores button ─────────────────────────────────────
+        if st.button("🔄 Recalculate All Credit Scores", use_container_width=True):
+            with st.spinner("Recalculating..."):
+                for c in customers:
+                    compute_credit_score(c["_id"])
+            st.success("✅ All credit scores updated!")
+            st.rerun()
+
         search = st.text_input("🔍 Search by name or phone")
         if search:
             customers = [c for c in customers
                          if search.lower() in c["name"].lower() or search in c["phone"]]
 
         st.markdown(f"**{len(customers)} customer(s)**")
-        risk_icon = {"Low Risk": "🟢", "Medium Risk": "🟡", "High Risk": "🔴", "Defaulter": "🟣"}
+        risk_icon = {
+            "Excellent":   "🌟",
+            "Low Risk":    "🟢",
+            "Medium Risk": "🟡",
+            "High Risk":   "🔴",
+            "Defaulter":   "🟣",
+        }
 
         for c in customers:
             with st.expander(f"{c['name']}  —  📞 {c['phone']}  —  Balance: ₹{c['balance']:,.2f}"):
@@ -400,7 +419,7 @@ def show_customers():
                 col4.metric("Credit Score", c.get("credit_score", 100))
 
                 cat = c.get("risk_category", "Low Risk")
-                st.markdown(f"**Risk:** {risk_icon.get(cat,'🟢')} {cat}")
+                st.markdown(f"**Risk:** {risk_icon.get(cat, '🟢')} {cat}")
                 if c.get("address"):
                     st.markdown(f"**Address:** {c['address']}")
 
@@ -456,14 +475,14 @@ def show_transactions():
     with st.expander("➕ Record New Transaction", expanded=True):
         with st.form("txn_form"):
             c1, c2, c3 = st.columns(3)
-            cust_name = c1.selectbox("Customer", list(cust_map.keys()))
-            txn_type  = c2.selectbox("Type", ["credit", "payment"],
-                                     format_func=lambda x: "💸 Credit (gave)" if x=="credit" else "✅ Payment (received)")
-            amount    = c3.number_input("Amount (₹)", min_value=0.01, step=1.0)
-            note      = st.text_input("Note (optional)")
-            c4, c5    = st.columns(2)
-            send_rcpt = c4.checkbox("📲 Send receipt to customer")
-            channel   = c5.selectbox("via", ["whatsapp", "sms"]) if send_rcpt else "whatsapp"
+            cust_name  = c1.selectbox("Customer", list(cust_map.keys()))
+            txn_type   = c2.selectbox("Type", ["credit", "payment"],
+                                      format_func=lambda x: "💸 Credit (gave)" if x == "credit" else "✅ Payment (received)")
+            amount     = c3.number_input("Amount (₹)", min_value=0.01, step=1.0)
+            note       = st.text_input("Note (optional)")
+            c4, c5     = st.columns(2)
+            send_rcpt  = c4.checkbox("📲 Send receipt to customer")
+            channel    = c5.selectbox("via", ["whatsapp", "sms"]) if send_rcpt else "whatsapp"
 
             if st.form_submit_button("Record Transaction", use_container_width=True):
                 cust = cust_map[cust_name]
@@ -505,7 +524,7 @@ def show_transactions():
             c1, c2, c3 = st.columns(3)
             c1.write(f"**Type:** {t['type'].capitalize()}")
             c2.write(f"**Amount:** ₹{t['amount']:,.2f}")
-            c3.write(f"**Note:** {t.get('note','—')}")
+            c3.write(f"**Note:** {t.get('note', '—')}")
 
             ea, eb = st.columns(2)
 
@@ -543,8 +562,13 @@ def show_defaulters():
     total = sum(d["balance"] for d in defaulters)
     st.error(f"**{len(defaulters)} customers** owe a total of **₹{total:,.2f}**")
 
-    risk_color = {"Low Risk": "#27ae60", "Medium Risk": "#f39c12",
-                  "High Risk": "#e74c3c", "Defaulter": "#8e44ad"}
+    risk_color = {
+        "Excellent":   "#1abc9c",
+        "Low Risk":    "#27ae60",
+        "Medium Risk": "#f39c12",
+        "High Risk":   "#e74c3c",
+        "Defaulter":   "#8e44ad",
+    }
 
     for d in sorted(defaulters, key=lambda x: x["balance"], reverse=True):
         cat   = d.get("risk_category", "Low Risk")
@@ -576,7 +600,7 @@ def show_reminders():
 
     st.divider()
     channel = st.radio("Send via", ["whatsapp", "sms"],
-                       format_func=lambda x: "💬 WhatsApp" if x=="whatsapp" else "📱 SMS",
+                       format_func=lambda x: "💬 WhatsApp" if x == "whatsapp" else "📱 SMS",
                        horizontal=True)
 
     if st.button("📤 Send Reminders Now", use_container_width=True, type="primary"):
@@ -618,7 +642,7 @@ def show_activity_log():
     df["timestamp"] = pd.to_datetime(df["timestamp"]).dt.strftime("%d %b %Y, %I:%M %p")
     df["icon"]      = df["action"].map(lambda a: action_icons.get(a, "📝"))
     df["action"]    = df["icon"] + "  " + df["action"]
-    display = df[["timestamp", "action", "details"]].copy()
+    display         = df[["timestamp", "action", "details"]].copy()
     display.columns = ["Time", "Action", "Details"]
     st.dataframe(display, use_container_width=True, hide_index=True)
 
