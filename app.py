@@ -588,6 +588,10 @@ def show_reminders():
 
     st.info("⏰ **Auto-reminders** fire on the **1st of every month at 9 AM UTC**. "
             "You can also send them manually below.")
+    st.caption(
+        "Twilio note: trial SMS works only for recipient numbers verified in your Twilio console. "
+        "WhatsApp sandbox delivery works only for numbers that have joined your sandbox."
+    )
 
     defaulters = get_defaulters(mid)
     if not defaulters:
@@ -606,11 +610,11 @@ def show_reminders():
     if st.button("📤 Send Reminders Now", use_container_width=True, type="primary"):
         with st.spinner("Sending..."):
             results = run_monthly_reminders(merchant_id=mid, channel=channel)
-        log_action(mid, "SEND_REMINDERS", f"Sent {len(results)} reminders via {channel}")
+        sent = sum(1 for r in results if r["status"] == "sent")
+        log_action(mid, "SEND_REMINDERS", f"Sent {sent}/{len(results)} reminders via {channel}")
         df = pd.DataFrame(results)
         df.columns = ["Customer", "Phone", "Balance (₹)", "Status", "Detail"]
         st.dataframe(df, use_container_width=True, hide_index=True)
-        sent = sum(1 for r in results if r["status"] == "sent")
         st.success(f"✅ {sent}/{len(results)} reminders sent.")
 
 
